@@ -1,0 +1,13 @@
+{
+  "name": "bfhl-coding-challenge",
+  "version": "1.0.0",
+  "description": "Node.js coding challenge for Srivarshan",
+  "main": "index.js",
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5"
+  },
+  "scripts": {
+    "start": "node index.js"
+  }
+}

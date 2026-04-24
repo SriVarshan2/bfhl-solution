@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BFHL Challenge - S.SRIVARSHAN</title>
+    <style>
+        body {
+            background-color: #0f172a;
+            color: #e2e8f0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 2rem;
+            min-height: 100vh;
+        }
+        .container {
+            width: 100%;
+            max-width: 800px;
+        }
+        h1 {
+            color: #a78bfa;
+            text-align: center;
+        }
+        textarea {
+            width: 100%;
+            height: 150px;
+            background-color: #1e293b;
+            color: #f8fafc;
+            border: 1px solid #475569;
+            border-radius: 0.5rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+            resize: none;
+            font-family: monospace;
+        }
+        button {
+            width: 100%;
+            padding: 0.75rem;
+            background-color: #7c3aed;
+            color: white;
+            border: none;
+            border-radius: 0.5rem;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.2s;
+        }
+        button:hover {
+            background-color: #6d28d9;
+        }
+        button:disabled {
+            background-color: #4c1d95;
+            cursor: not-allowed;
+        }
+        #results {
+            margin-top: 2rem;
+        }
+        .card {
+            background-color: #1e293b;
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        }
+        .tree-card { border-left: 5px solid #10b981; }
+        .cycle-card { border-left: 5px solid #ef4444; }
+        .warning-card { border-left: 5px solid #f59e0b; }
+        .summary-card { background-color: #334155; }
+        
+        .card h3 { margin-top: 0; color: #cbd5e1; }
+        .node-list { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+        .node {
+            background-color: #475569;
+            padding: 0.25rem 0.5rem;
+            border-radius: 0.25rem;
+            font-size: 0.875rem;
+        }
+        .loading { text-align: center; color: #a78bfa; margin-top: 1rem; }
+        .error { color: #ef4444; text-align: center; margin-top: 1rem; }
+        pre { background: #0f172a; padding: 0.5rem; border-radius: 0.25rem; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>BFHL Coding Challenge</h1>
+        <textarea id="edgeInput" placeholder="A->B, B->C, C->D, X->Y, Y->X"></textarea>
+        <button id="submitBtn">Analyze Graph</button>
+        
+        <div id="loading" class="loading" style="display: none;">Processing...</div>
+        <div id="error" class="error" style="display: none;"></div>
+        <div id="results"></div>
+    </div>
+
+    <script>
+        const submitBtn = document.getElementById('submitBtn');
+        const edgeInput = document.getElementById('edgeInput');
+        const resultsDiv = document.getElementById('results');
+        const loadingDiv = document.getElementById('loading');
+        const errorDiv = document.getElementById('error');
+
+        submitBtn.addEventListener('click', async () => {
+            const input = edgeInput.value.trim();
+            if (!input) return;
+
+            const nodes = input.split(',').map(e => e.trim()).filter(e => e);
+            
+            resultsDiv.innerHTML = '';
+            loadingDiv.style.display = 'block';
+            errorDiv.style.display = 'none';
+            submitBtn.disabled = true;
+
+            try {
+                const response = await fetch('/bfhl', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nodes })
+                });
+
+                if (!response.ok) throw new Error('API request failed');
+
+                const data = await response.json();
+                displayResults(data);
+            } catch (err) {
+                errorDiv.textContent = err.message;
+                errorDiv.style.display = 'block';
+            } finally {
+                loadingDiv.style.display = 'none';
+                submitBtn.disabled = false;
+            }
+        });
+
+        function displayResults(data) {
+            resultsDiv.innerHTML = '';
+
+            // Hierarchies (Trees and Cycles)
+            data.hierarchies.forEach(h => {
+                const card = document.createElement('div');
+                card.className = `card ${h.type === 'tree' ? 'tree-card' : 'cycle-card'}`;
+                
+                if (h.type === 'tree') {
+                    card.innerHTML = `
+                        <h3>Tree Root: ${h.root}</h3>
+                        <p>Depth: ${h.depth}</p>
+                        <pre>${JSON.stringify(h.tree, null, 2)}</pre>
+                    `;
+                } else {
+                    card.innerHTML = `
+                        <h3>Cycle Detected</h3>
+                        <div class="node-list">
+                            ${h.nodes.map(n => `<span class="node">${n}</span>`).join('')}
+                        </div>
+                    `;
+                }
+                resultsDiv.appendChild(card);
+            });
+
+            // Warnings
+            if (data.invalid_entries.length > 0 || data.duplicate_edges.length > 0) {
+                const warnCard = document.createElement('div');
+                warnCard.className = 'card warning-card';
+                warnCard.innerHTML = `
+                    <h3>Invalid/Duplicate Entries</h3>
+                    ${data.invalid_entries.length > 0 ? `<p>Invalid: ${data.invalid_entries.join(', ')}</p>` : ''}
+                    ${data.duplicate_edges.length > 0 ? `<p>Duplicates: ${data.duplicate_edges.join(', ')}</p>` : ''}
+                `;
+                resultsDiv.appendChild(warnCard);
+            }
+
+            // Summary
+            const summaryCard = document.createElement('div');
+            summaryCard.className = 'card summary-card';
+            summaryCard.innerHTML = `
+                <h3>Summary</h3>
+                <p>Total Trees: ${data.summary.total_trees}</p>
+                <p>Total Cycles: ${data.summary.total_cycles}</p>
+                <p>Largest Tree Root: ${data.summary.largest_tree_root || 'N/A'}</p>
+                <hr style="border: 0; border-top: 1px solid #475569; margin: 1rem 0;">
+                <div style="font-size: 0.8rem; color: #94a3b8;">
+                    <p>Roll Number: ${data.college_roll_number}</p>
+                    <p>User ID: ${data.user_id}</p>
+                </div>
+            `;
+            resultsDiv.appendChild(summaryCard);
+        }
+    </script>
+</body>
+</html>
